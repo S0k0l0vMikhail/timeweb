@@ -11,7 +11,9 @@ composer install
 ```
 
 После поднятия докера, в контейнере с бд создайте базу данных, пользователя для него и наделите его правами
-Все логины/пароли ```timeweb```
+
+Все логины/пароли: ```timeweb```
+
 ```sql
 create database timeweb;
 CREATE USER 'timeweb'@localhost IDENTIFIED BY 'timeweb';
