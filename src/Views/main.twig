@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title><?php echo $title;?></title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <header>
+    <div class="container-fluid grid">
+      <nav class="navbar navbar-expand-lg">
+        <ul class="navbar-nav">
+          <li class="nav-item">
+            <a href="/" class="nav-link">Главная</a>
+          </li>
+          <li class="nav-item">
+            <a href="/results" class="nav-link">Результаты</a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+ <main>
+   <div id="app" class="container">
+     <div class="row justify-content-md-center">
+       <div class="alert alert-danger" role="alert" v-show="errors.server_error !== ''">
+         <small class="form-text text-muted">{{ errors.server_error }}</small>
+       </div>
+     </div>
+     <div class="row justify-content-md-center">
+         <form @submit.prevent="search()" v-bind="formData" action="#">
+           <div class="form-group">
+               <label>Введите адрес:</label>
+                 <input
+                         class="form-control"
+                         type="url"
+                         :value="formData.url"
+                         v-model="formData.url"
+                         @keyup="errors.url = ''"
+                 >
+             <span v-if="formData.url.length > 50">Адрес слишком длинный</span>
+             <small class="form-text text-muted" v-show="errors.url">{{ errors.url }}</small>
+           </div>
+           <div class="form-group">
+               <label>Что искать:
+                 <select v-model="formData.selected" @change="clear(false)" class="form-control">
+                   <option value="links">Ссылки</option>
+                   <option value="pictures">Картинки</option>
+                   <option value="text">Текст</option>
+                 </select>
+               </label>
+             <small class="form-text text-muted" v-show="errors.selected">{{ errors.selected }}</small>
+           </div>
+           <div class="form-group" v-show="formData.selected === 'text'">
+               <textarea
+                       class="form-control"
+                       :value="formData.text"
+                       v-model="formData.text"
+                       @keyup="errors.text = ''"
+               ></textarea>
+             <small class="form-text text-muted" v-show="errors.text">{{ errors.text }}</small>
+             <small class="form-text text-muted"
+                    v-show="formData.text.length > 50"
+             >Текст слишком длинный. Максимальная длинна 50 символов</small>
+           </div>
+           <button type="submit" class="btn btn-success">Искать</button>
+           <button type="button" class="btn btn-secondary" @click="clear">Очистить</button>
+         </form>
+     </div>
+     <div class="row justify-content-md-center">
+       <div v-show="answer.date !== ''">
+         <div v-if="formData.selected !== 'text'" >
+           <div v-for="value in answer.elements" class="list-group">
+             <a :href="value" class="list-group-item list-group-item-action">{{ value | truncate }}</a>
+           </div>
+         </div>
+         <div v-else-if="formData.selected === 'text'" class="list-group">
+           <span>Найдено {{ answer.elementsCount }} совпадений</span>
+         </div>
+       </div>
+     </div>
+   </div>
+ </main>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.11"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script>
+  var vm = new Vue({
+    el: '#app',
+    data() {
+      return {
+        formData: {
+          url: 'https://yandex.ru',
+          selected: '',
+          text: ''
+        },
+        errors: {
+          url: '',
+          selected: '',
+          text: '',
+          server_error: ''
+        },
+        answer: {
+            url: '',
+            elements: '',
+            date: '',
+            elementsCount: Number
+        }
+      };
+    },
+    filters: {
+      truncate: function (text) {
+          return text.substr(0, 25) + '...'
+      }
+    },
+    methods: {
+      search() {
+        this.errors.url = this.formData.url === '' ? 'Вы не заполнили поле' : ''
+        this.errors.selected = this.formData.selected === '' ? 'Вы не заполнили поле' : ''
+        this.errors.text = this.formData.selected === 'text' && this.formData.text === '' ? 'Вы не заполнили поле' : ''
+
+        if ( this.errors.url !== '' || this.errors.selected !== '' || this.errors.text !== '' ) {
+            return
+        }
+
+        if (this.formData.url.length > 50 || this.formData.text.length > 50) {
+            return
+        }
+
+        axios.post('/search',
+          {
+              url: this.formData.url,
+              selected: this.formData.selected,
+              text: this.formData.text
+          })
+          .then(response => {
+              // После ответа сервера очищаем предыдущие ошибки, проверяем на наличие новых
+              // Если нет - выводим данные, если есть - очищаем поля
+              this.errors.server_error = ''
+              if (!response.data.error) {
+                  this.answer.elements = JSON.parse(response.data.elements)
+                  this.answer.date = response.data.date
+                  this.answer.url = response.data.url
+                  this.answer.elementsCount = response.data.elementsCount
+
+                  return
+              }
+
+              this.clear(false)
+              this.errors.server_error = response.data.error
+          })
+          .catch(error => {
+              console.log(error)
+          })
+      },
+      clear(flag = true) {
+          //Флаг что бы можно была сохранить введеные ранее данные в форме
+          this.errors = {
+              url: '',
+              selected: '',
+              text: '',
+              server_error: ''
+          }
+          this.answer = {
+              url: '',
+              elements: '',
+              date: '',
+              elementsCount: Number
+          }
+          if (flag) {
+              this.formData = {
+                  url: '',
+                  selected: '',
+                  text: ''
+              }
+          }
+      }
+    }
+  })
+</script>
+</body>
+</html>
